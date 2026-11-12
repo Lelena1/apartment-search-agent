@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title}">Подбор квартиры</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body>
+
+<header th:fragment="header" class="header">
+    <a th:href="@{/}" class="logo">🏠 Подбор квартиры</a>
+    <span class="tagline">ЗИЛАРТ · Ривер Парк Коломенское</span>
+</header>
+
+<form th:fragment="form" class="search" th:action="@{/search}" method="get" th:object="${form}">
+    <fieldset class="deal">
+        <legend>Что ищем</legend>
+        <label th:each="d : ${dealTypes}" class="chip">
+            <input type="radio" name="deal" th:value="${d}" th:checked="${form.deal == d}">
+            <span th:text="${d.title()}">Покупка</span>
+        </label>
+    </fieldset>
+    <fieldset>
+        <legend>Где</legend>
+        <label th:each="dist : ${allDistricts}" class="chip">
+            <input type="checkbox" name="districts" th:value="${dist}" th:checked="${form.districts.contains(dist)}">
+            <span th:text="${dist.title()}">ЗИЛАРТ</span>
+        </label>
+    </fieldset>
+    <fieldset>
+        <legend>Бюджет, ₽</legend>
+        <input type="number" name="maxPrice" min="0" step="1000" th:value="${form.maxPrice}"
+               placeholder="по умолчанию: 45 000 000 / 150 000 в месяц">
+    </fieldset>
+    <div class="actions">
+        <button type="submit">Подобрать по правилам</button>
+        <button type="submit" th:formaction="@{/agent}" formmethod="post" class="secondary"
+                th:disabled="${!agentAvailable}"
+                th:title="${agentAvailable} ? 'Claude проанализирует подборку' : 'Нужен ключ ANTHROPIC_API_KEY'">
+            Спросить AI-агента
+        </button>
+        <label class="web" th:classappend="${!agentAvailable} ? 'muted'">
+            <input type="checkbox" name="web" value="true" th:checked="${form.web}" th:disabled="${!agentAvailable}">
+            агенту искать в интернете (ЦИАН, Авито, Яндекс, ДомКлик)
+        </label>
+    </div>
+    <p class="hint" th:unless="${agentAvailable}">
+        AI-агент выключен: не задан ключ <code>ANTHROPIC_API_KEY</code>. Подбор по правилам работает без него.
+    </p>
+</form>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+target/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# личные данные: реальные подборки объявлений
+data/
+*.local.json
+.env

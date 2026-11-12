@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head th:replace="~{fragments :: head('Результаты подбора')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <form th:replace="~{fragments :: form}"></form>
+
+    <section th:if="${report != null}" class="report">
+        <h2>Рекомендация AI-агента</h2>
+        <div th:if="${report.success()}">
+            <div class="markdown" th:utext="${reportHtml}"></div>
+            <p class="meta" th:text="|Обращений к базе: ${report.toolCalls()}, веб-поисков: ${report.webSearches()}|"></p>
+        </div>
+        <p th:unless="${report.success()}" class="error" th:text="${report.error()}"></p>
+    </section>
+
+    <section class="summary">
+        <h2 th:text="|${result.criteria().dealType().title()}: просмотрено ${result.matches().size()} объявлений|">Итог</h2>
+        <p class="meta" th:text="|Источники: ${#strings.listJoin(result.sources(), ', ')}|"></p>
+        <div class="counters">
+            <span class="badge MATCH" th:text="|Подходят: ${result.count(T(io.github.lelena1.flatfinder.analysis.Verdict).MATCH)}|"></span>
+            <span class="badge CHECK" th:text="|Уточнить: ${result.count(T(io.github.lelena1.flatfinder.analysis.Verdict).CHECK)}|"></span>
+            <span class="badge REJECT" th:text="|Отсеяны: ${result.count(T(io.github.lelena1.flatfinder.analysis.Verdict).REJECT)}|"></span>
+        </div>
+    </section>
+
+    <section th:each="v : ${verdicts}" th:if="${!result.withVerdict(v).isEmpty()}" th:with="group=${result.withVerdict(v)}">
+        <h3 th:text="${v.title()}">Подходит</h3>
+        <article th:each="m : ${group}" class="card" th:classappend="${m.verdict()}">
+            <div class="card-head">
+                <div>
+                    <div class="price" th:text="|${#numbers.formatInteger(m.listing().price(), 3, 'WHITESPACE')} ${m.listing().dealType().priceUnit()}|">42 000 000 ₽</div>
+                    <div class="title">
+                        <span th:text="${m.analysis().layout().title()}">Евротрёшка</span>
+                        · <span th:text="|${#numbers.formatDecimal(m.listing().totalArea(), 1, 'NONE', 1, 'COMMA')} м²|">62 м²</span>
+                        <span th:if="${m.listing().kitchenArea() != null}" th:text="|· кухня ${#numbers.formatDecimal(m.listing().kitchenArea(), 1, 'NONE', 1, 'COMMA')} м²|"></span>
+                        <span th:if="${m.listing().floor() != null}" th:text="|· этаж ${m.listing().floor()}/${m.listing().floorsTotal()}|"></span>
+                    </div>
+                    <div class="addr" th:text="|${m.listing().district().title()}, ${m.listing().address()}|">адрес</div>
+                </div>
+                <div class="score" th:unless="${m.verdict().name() == 'REJECT'}" th:text="${m.score()}" title="Баллы соответствия">85</div>
+            </div>
+            <ul class="pros" th:unless="${m.pros().isEmpty()}">
+                <li th:each="p : ${m.pros()}" th:text="${p}"></li>
+            </ul>
+            <ul class="check" th:unless="${m.toCheck().isEmpty()}">
+                <li th:each="q : ${m.toCheck()}" th:text="${q}"></li>
+            </ul>
+            <ul class="cons" th:unless="${m.cons().isEmpty()}">
+                <li th:each="c : ${m.cons()}" th:text="${c}"></li>
+            </ul>
+            <details>
+                <summary>Текст объявления</summary>
+                <p th:text="${m.listing().description()}"></p>
+            </details>
+            <a th:if="${m.listing().url() != null}" th:href="${m.listing().url()}" target="_blank" rel="noopener">Открыть объявление ↗</a>
+        </article>
+    </section>
+</main>
+</body>
+</html>
