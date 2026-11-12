@@ -5,6 +5,6 @@ target/
 .DS_Store
 
 # личные данные: реальные подборки объявлений
-data/
+/data/
 *.local.json
 .env
