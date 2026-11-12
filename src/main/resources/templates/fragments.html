@@ -37,7 +37,7 @@
         <button type="submit">Подобрать по правилам</button>
         <button type="submit" th:formaction="@{/agent}" formmethod="post" class="secondary"
                 th:disabled="${!agentAvailable}"
-                th:title="${agentAvailable} ? 'Claude проанализирует подборку' : 'Нужен ключ ANTHROPIC_API_KEY'">
+                th:title="${agentAvailable} ? |Claude проанализирует подборку (${agentName})| : 'AI-агент не настроен'">
             Спросить AI-агента
         </button>
         <label class="web" th:classappend="${!agentAvailable} ? 'muted'">
@@ -45,8 +45,10 @@
             агенту искать в интернете (ЦИАН, Авито, Яндекс, ДомКлик)
         </label>
     </div>
+    <p class="hint" th:if="${agentAvailable}" th:text="|AI-агент работает через ${agentName}.|"></p>
     <p class="hint" th:unless="${agentAvailable}">
-        AI-агент выключен: не задан ключ <code>ANTHROPIC_API_KEY</code>. Подбор по правилам работает без него.
+        AI-агент выключен: нужен Claude Code со входом по подписке или ключ <code>ANTHROPIC_API_KEY</code>.
+        Подбор по правилам работает без них.
     </p>
 </form>
 

@@ -1,6 +1,6 @@
 # Агент подбора квартиры
 
-AI-агент на **Java 17 + Spring Boot 3 + Claude API**, который подбирает квартиру **для покупки или аренды** в выбранном районе Москвы. Он проверяет каждое объявление по критериям и сообщает, что подходит, что нужно уточнить у продавца и почему остальные варианты отсеяны.
+AI-агент на **Java 17 + Spring Boot 3 + Claude** (Claude API или Claude Code), который подбирает квартиру **для покупки или аренды** в выбранном районе Москвы. Он проверяет каждое объявление по критериям и сообщает, что подходит, что нужно уточнить у продавца и почему остальные варианты отсеяны.
 
 Проект вырос из реальной задачи — найти квартиру в ЗИЛАРТе или ЖК «Ривер Парк Коломенское»:
 
@@ -16,7 +16,7 @@ AI-агент на **Java 17 + Spring Boot 3 + Claude API**, который по
 ```
  источники объявлений          анализ и оценка                        Claude-агент
 ┌──────────────────┐     ┌────────────────────────────┐     ┌──────────────────────────────┐
-│ DemoListingSource│──┐  │ ListingAnalyzer            │     │ ApartmentAgent (tool use)    │
+│ DemoListingSource│──┐  │ ListingAnalyzer            │     │ AgentService: API или Code   │
 │ (демо-база)      │  ├─▶│  текст → планировка,       │──┬─▶│  search_listings             │
 │ ImportedListing- │  │  │  балкон, хранение, отделка │  │  │  get_listing_details         │
 │ Source (свой     │──┘  │ MatchScorer                │  │  │  web_search (ЦИАН, Авито,    │
@@ -31,12 +31,19 @@ AI-агент на **Java 17 + Spring Boot 3 + Claude API**, который по
 - Для каждого признака используется трёхзначная логика `YES / NO / UNKNOWN`. «Не указано» — это не «нет»: такая квартира не теряется, а попадает в группу «уточнить у продавца».
 - Учтены тонкие случаи: французский балкон — это не балкон; кладовая для велосипедов на этаже — не место хранения в квартире; «с ремонтом, но без мебели» — для аренды это отказ.
 
-**2. Claude-агент** (`agent`) — это агентный цикл на [Claude API](https://docs.claude.com) (модель `claude-opus-5-5`).
+**2. Claude-агент** (`agent`) подключается одним из двух способов. Оба реализуют интерфейс `AgentBackend`, а нужный выбирает `AgentService`.
 
-- Агент сам вызывает инструменты приложения: получает оценённую подборку, затем перепроверяет спорные объявления по полному тексту. Правила на регулярных выражениях могут ошибаться, а модель понимает формулировки вроде «спальня и кабинет — планировка свободная».
-- Если отметить в форме «искать в интернете», агент использует серверный инструмент `web_search`, ограниченный сайтами недвижимости. Свежие объявления он приводит со ссылками и честно помечает, что приложение их не проверяло.
+| | `ClaudeApiAgent` — Claude API | `ClaudeCodeAgent` — Claude Code CLI |
+|---|---|---|
+| Оплата | по токенам, нужен ключ `ANTHROPIC_API_KEY` | входит в подписку Claude Pro/Max |
+| Как работает | агентный цикл на Anthropic Java SDK (`claude-opus-5-5`): модель сама вызывает инструменты приложения `search_listings` и `get_listing_details` | приложение запускает `claude -p` и передаёт уже оценённые объявления через stdin, ответ получает в JSON |
+| Веб-поиск | серверный `web_search`, ограниченный сайтами недвижимости | встроенный `WebSearch` Claude Code |
+| Для чего | сервер, развёртывание для других людей | личное использование на своём компьютере |
+
+- В обоих режимах агент перепроверяет спорные объявления по полному тексту. Правила на регулярных выражениях могут ошибаться, а модель понимает формулировки вроде «спальня и кабинет — планировка свободная».
+- Свежие объявления из интернета агент приводит со ссылками и честно помечает, что приложение их не проверяло.
 - Ответ — рекомендация в Markdown: лучшие варианты, вопросы продавцу, итог.
-- Включён серверный фолбэк: если модель откажется отвечать, запрос повторит модель-замена. Для ошибок API своя обработка: неверный ключ, лимиты, сбой сети.
+- В режиме API включён серверный фолбэк на модель-замену при отказе. Для ошибок своя обработка: неверный ключ, лимиты, сбой сети, Claude Code не установлен или вход не выполнен.
 
 ## Запуск
 
@@ -48,12 +55,26 @@ AI-агент на **Java 17 + Spring Boot 3 + Claude API**, который по
 
 Откройте http://localhost:8080. Подбор по правилам работает сразу на демо-базе.
 
-Чтобы включить AI-агента, задайте ключ Claude API:
+### AI-агент по подписке (без оплаты API)
+
+1. Установите Claude Code — в PowerShell:
+   ```powershell
+   irm https://claude.ai/install.ps1 | iex
+   ```
+   На macOS и Linux: `curl -fsSL https://claude.ai/install.sh | bash`.
+2. Один раз войдите: запустите в терминале `claude`, выполните `/login` и выберите вход через подписку Claude.
+3. Запустите приложение. В режиме `app.agent.mode=auto` оно само найдёт Claude Code, и кнопка «Спросить AI-агента» станет активной.
+
+Если `claude` установлен не в PATH, укажите путь явно: `--app.agent.claude-code-command=C:/путь/к/claude.exe`.
+
+### AI-агент через Claude API
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...      # Windows PowerShell: $env:ANTHROPIC_API_KEY="sk-ant-..."
 ./mvnw spring-boot:run
 ```
+
+Если заданы и ключ, и Claude Code, в режиме `auto` используется API. Чтобы выбрать режим явно, задайте `app.agent.mode=api` или `app.agent.mode=claude-code`.
 
 ### Свои объявления
 
@@ -75,6 +96,7 @@ export ANTHROPIC_API_KEY=sk-ant-...      # Windows PowerShell: $env:ANTHROPIC_AP
 
 - `ListingAnalyzerTest` — распознавание планировок, балконов, отделки и мебели на примерах реальных формулировок из объявлений.
 - `ListingSearchServiceTest` — полный конвейер на демо-базе: вердикты, причины отказа, сортировка.
+- `ClaudeCodeAgentTest` — разбор ответа Claude Code CLI, понятные ошибки, когда CLI не установлен или вход не выполнен.
 - `WebLayerTest` — страницы отдаются и показывают подборку.
 
 ## Технологии
@@ -83,7 +105,7 @@ export ANTHROPIC_API_KEY=sk-ant-...      # Windows PowerShell: $env:ANTHROPIC_AP
 |---|---|
 | Язык и сборка | Java 17, Maven (Wrapper) |
 | Веб | Spring Boot 3.3, Spring MVC, Thymeleaf, адаптивная вёрстка со светлой и тёмной темой |
-| AI | [Anthropic Java SDK](https://github.com/anthropics/anthropic-java), Claude Opus 5.5, tool use, web search |
+| AI | [Anthropic Java SDK](https://github.com/anthropics/anthropic-java), Claude Opus 5.5, tool use, web search; Claude Code CLI (`claude -p`) |
 | Markdown | commonmark-java, HTML в ответе экранируется |
 | Тесты | JUnit 5, AssertJ, MockMvc |
 
@@ -94,7 +116,7 @@ io.github.lelena1.flatfinder
 ├── domain     — Listing, SearchCriteria, DealType, District
 ├── source     — источники объявлений (демо-база, импорт JSON)
 ├── analysis   — ListingAnalyzer, MatchScorer, ListingSearchService
-├── agent      — ApartmentAgent (агентный цикл), ListingTools (инструменты), промпты
+├── agent      — AgentService, ClaudeApiAgent (агентный цикл), ClaudeCodeAgent (CLI), ListingTools, промпты
 └── web        — контроллер и форма
 ```
 

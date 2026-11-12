@@ -61,18 +61,42 @@ public class ListingTools {
 
     public String details(SearchCriteria criteria, String id) {
         return searchService.findById(id, criteria)
-                .map(m -> {
-                    ObjectNode node = summary(m);
-                    node.put("description", m.listing().descriptionOrEmpty());
-                    node.put("layout", m.analysis().layout().title());
-                    node.put("balcony", m.analysis().balcony().name());
-                    node.put("balcony_from_kitchen", m.analysis().balconyFromKitchen().name());
-                    node.put("storage", m.analysis().storage().name());
-                    node.put("ready_finish", m.analysis().readyFinish().name());
-                    node.put("furniture", m.analysis().furniture().name());
-                    return node.toString();
-                })
+                .map(m -> detailed(m).toString())
                 .orElse("{\"error\":\"Объявление с id " + id + " не найдено\"}");
+    }
+
+    /**
+     * Всё сразу одним JSON — для режима, где модель не вызывает инструменты сама (Claude Code CLI):
+     * подходящие и спорные объявления с полным текстом, отклонённые — кратко, только с причинами.
+     */
+    public String snapshot(SearchCriteria criteria) {
+        ObjectNode root = mapper.createObjectNode();
+        ArrayNode candidates = root.putArray("candidates");
+        ArrayNode rejected = root.putArray("rejected");
+        for (Match m : searchService.search(criteria).matches()) {
+            if (m.verdict() == Verdict.REJECT) {
+                ObjectNode r = rejected.addObject();
+                r.put("id", m.listing().id());
+                r.put("address", m.listing().address());
+                r.put("price_rub", m.listing().price());
+                r.set("cons", mapper.valueToTree(m.cons()));
+            } else {
+                candidates.add(detailed(m));
+            }
+        }
+        return root.toPrettyString();
+    }
+
+    private ObjectNode detailed(Match m) {
+        ObjectNode node = summary(m);
+        node.put("description", m.listing().descriptionOrEmpty());
+        node.put("layout", m.analysis().layout().title());
+        node.put("balcony", m.analysis().balcony().name());
+        node.put("balcony_from_kitchen", m.analysis().balconyFromKitchen().name());
+        node.put("storage", m.analysis().storage().name());
+        node.put("ready_finish", m.analysis().readyFinish().name());
+        node.put("furniture", m.analysis().furniture().name());
+        return node;
     }
 
     private ObjectNode summary(Match m) {

@@ -1,7 +1,8 @@
 package io.github.lelena1.flatfinder.web;
 
 import io.github.lelena1.flatfinder.agent.AgentReport;
-import io.github.lelena1.flatfinder.agent.ApartmentAgent;
+import io.github.lelena1.flatfinder.agent.AgentBackend;
+import io.github.lelena1.flatfinder.agent.AgentService;
 import io.github.lelena1.flatfinder.analysis.ListingSearchService;
 import io.github.lelena1.flatfinder.analysis.Verdict;
 import io.github.lelena1.flatfinder.domain.DealType;
@@ -23,9 +24,9 @@ public class SearchController {
     private static final HtmlRenderer HTML = HtmlRenderer.builder().escapeHtml(true).sanitizeUrls(true).build();
 
     private final ListingSearchService searchService;
-    private final ApartmentAgent agent;
+    private final AgentService agent;
 
-    public SearchController(ListingSearchService searchService, ApartmentAgent agent) {
+    public SearchController(ListingSearchService searchService, AgentService agent) {
         this.searchService = searchService;
         this.agent = agent;
     }
@@ -36,6 +37,7 @@ public class SearchController {
         model.addAttribute("allDistricts", District.values());
         model.addAttribute("verdicts", Verdict.values());
         model.addAttribute("agentAvailable", agent.available());
+        model.addAttribute("agentName", agent.active().map(AgentBackend::name).orElse(null));
     }
 
     @GetMapping("/")

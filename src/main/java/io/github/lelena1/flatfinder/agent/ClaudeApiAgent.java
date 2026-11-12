@@ -17,7 +17,6 @@ import com.anthropic.models.messages.Tool;
 import com.anthropic.models.messages.ToolResultBlockParam;
 import com.anthropic.models.messages.ToolUseBlock;
 import com.anthropic.models.messages.WebSearchTool20260209;
-import io.github.lelena1.flatfinder.domain.District;
 import io.github.lelena1.flatfinder.domain.SearchCriteria;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,24 +35,31 @@ import java.util.stream.Collectors;
  * web search, ограниченный сайтами недвижимости). Цикл продолжается, пока модель вызывает инструменты.
  */
 @Service
-public class ApartmentAgent {
+public class ClaudeApiAgent implements AgentBackend {
 
-    private static final Logger log = LoggerFactory.getLogger(ApartmentAgent.class);
+    private static final Logger log = LoggerFactory.getLogger(ClaudeApiAgent.class);
 
     private final AgentProperties props;
     private final ListingTools tools;
     private volatile AnthropicClient client;
 
-    public ApartmentAgent(AgentProperties props, ListingTools tools) {
+    public ClaudeApiAgent(AgentProperties props, ListingTools tools) {
         this.props = props;
         this.tools = tools;
     }
 
-    /** Агент доступен, если в окружении есть ключ Claude API. Без ключа приложение работает в офлайн-режиме. */
+    @Override
+    public String name() {
+        return "Claude API";
+    }
+
+    /** Агент доступен, если в окружении есть ключ Claude API. */
+    @Override
     public boolean available() {
         return notBlank(System.getenv("ANTHROPIC_API_KEY")) || notBlank(System.getenv("ANTHROPIC_AUTH_TOKEN"));
     }
 
+    @Override
     public AgentReport run(SearchCriteria criteria, boolean webSearch) {
         if (!available()) {
             return AgentReport.failed("Не задан ключ Claude API (переменная окружения ANTHROPIC_API_KEY). "
@@ -62,9 +68,9 @@ public class ApartmentAgent {
         MessageCreateParams.Builder params = MessageCreateParams.builder()
                 .model(props.model())
                 .maxTokens(16000L)
-                .system(Prompts.system(props.searchDomains()))
+                .system(AgentPrompts.system(props.searchDomains()))
                 .outputConfig(OutputConfig.builder().effort(OutputConfig.Effort.MEDIUM).build())
-                .addUserMessage(Prompts.task(criteria, webSearch));
+                .addUserMessage(AgentPrompts.task(criteria, webSearch));
         tools.specs().values().forEach(spec -> params.addTool(toSdkTool(spec)));
         if (webSearch) {
             params.addTool(WebSearchTool20260209.builder()
@@ -182,46 +188,5 @@ public class ApartmentAgent {
 
     private static boolean notBlank(String s) {
         return s != null && !s.isBlank();
-    }
-
-    /** Тексты промптов держим отдельно от логики цикла. */
-    static final class Prompts {
-
-        static String system(List<String> domains) {
-            return """
-                    Ты — помощник по подбору квартиры в Москве. Пользователь ищет квартиру для себя, \
-                    поэтому важны точность и честность: не выдумывай объявления, цены и характеристики.
-
-                    Критерии пользователя:
-                    - планировка: РОВНО две спальни + кухня-гостиная (евротрёшка) или две комнаты + большая отдельная кухня; \
-                    евродвушка (одна спальня) и квартиры с тремя спальнями не подходят;
-                    - обязательно балкон или лоджия; желательно — с выходом из кухни или кухни-гостиной;
-                    - желательно места хранения: гардеробная, постирочная, кладовая;
-                    - покупка: готовая отделка, чтобы можно было сразу заехать; аренда: ремонт и обязательно мебель;
-                    - апартаменты не подходят.
-
-                    Как работать:
-                    1. Сначала вызови search_listings — приложение уже проверило объявления по правилам.
-                    2. Для лучших кандидатов и спорных случаев вызови get_listing_details и перепроверь вывод \
-                    приложения по тексту описания: правила на регулярных выражениях могут ошибаться.
-                    3. Если доступен веб-поиск — найди свежие объявления в этих же жилых комплексах только на сайтах: %s. \
-                    Указывай ссылку на каждое найденное объявление и честно помечай, что его не проверяло приложение. \
-                    Не утверждай того, чего нет в результатах поиска.
-
-                    Формат ответа (Markdown, по-русски, не длиннее 400 слов):
-                    ## Лучшие варианты — до 3 квартир: адрес, цена, площадь, чем подходит, что уточнить.
-                    ## Уточнить у продавца — короткий список вопросов по главным кандидатам.
-                    ## Что ещё нашлось в интернете — только если был веб-поиск.
-                    ## Итог — одна-две фразы с рекомендацией.
-                    """.formatted(String.join(", ", domains));
-        }
-
-        static String task(SearchCriteria c, boolean webSearch) {
-            String districts = c.districts().stream().map(District::title).collect(Collectors.joining(", "));
-            String price = String.format("%,d", c.maxPrice()).replace(',', ' ');
-            return "Сценарий: %s. Районы: %s. Бюджет: до %s %s. %s"
-                    .formatted(c.dealType().title().toLowerCase(), districts, price, c.dealType().priceUnit(),
-                            webSearch ? "Веб-поиск разрешён." : "Веб-поиск не используй — только базы приложения.");
-        }
     }
 }
