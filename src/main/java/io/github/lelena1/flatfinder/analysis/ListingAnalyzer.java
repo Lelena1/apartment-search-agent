@@ -4,6 +4,7 @@ import io.github.lelena1.flatfinder.domain.Listing;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -16,13 +17,18 @@ import java.util.regex.Pattern;
 @Component
 public class ListingAnalyzer {
 
-    private static final Pattern EURO_TWO = rx("евро-?\\s?2|евро-?\\s?двух|евродвушк|евро двушк");
-    private static final Pattern EURO_THREE = rx("евро-?\\s?3|евро-?\\s?тр[её]х|евротр[её]шк|евро тр[её]шк");
-    private static final Pattern EURO_FOUR = rx("евро-?\\s?4|евро-?\\s?четыр");
-    private static final Pattern TWO_BEDROOMS = rx(
-            "(две|2)\\s+((изолированн|отдельн|раздельн)\\w*\\s+)?(спальн|комнат)|двумя\\s+спальн");
-    private static final Pattern THREE_BEDROOMS = rx("(три|3)\\s*(изолированн\\w*\\s*)?спальн|(три|3)\\s*изолированн\\w*\\s*комнат");
-    private static final Pattern ONE_BEDROOM = rx("(изолированн|отдельн)(ая|ую)\\s*спальн|одна спальн|1 спальн");
+    /** «евро-3», «евротрёшка», «евро-4х» — число комнат вместе с кухней-гостиной. */
+    private static final Pattern EURO = rx("евро-?\\s?(\\d)|евро-?\\s?(двух|двушк|трех|трешк|четыр|пяти)|евро(двушк|трешк)");
+    private static final Pattern N_BEDROOMS = rx(
+            "(\\d|одна|одной|две|двумя|двух|три|тремя|трех|четыре)\\s+((изолированн|отдельн|раздельн)\\w*\\s+)?(спальн[яиюе]|спален)");
+    private static final Pattern N_ISOLATED_ROOMS = rx(
+            "(\\d|две|двумя|двух|три|тремя|трех|четыре)\\s+(изолированн|отдельн|раздельн)\\w*\\s+комнат");
+    private static final Pattern N_ROOMS = rx("(\\d|две|три|четыре)\\s+комнат");
+    private static final Pattern ONE_BEDROOM = rx("(изолированн|отдельн)(ая|ую|ой)\\s+спальн");
+    private static final Pattern SEPARATE_KITCHEN = rx("отдельн\\w*\\s+кухн|кухн\\w*\\s+\\(?отдельн");
+    private static final Pattern STUDIO = rx("студи[яюи]");
+    /** Отдельная кухня такой площади и больше без пояснений в тексте может оказаться кухней-гостиной. */
+    private static final double AMBIGUOUS_KITCHEN_AREA = 15.0;
     private static final Pattern KITCHEN_LIVING = rx("кухн\\w*[- ]?(гостин|столов)|гостин\\w*[- ]кухн");
 
     private static final Pattern FRENCH_BALCONY = rx("французск\\w*\\s*балкон");
@@ -43,10 +49,12 @@ public class ListingAnalyzer {
     private static final Pattern NO_FURNITURE = rx("без мебели");
     private static final Pattern FURNITURE = rx("мебел|меблирован");
 
-    public ListingAnalysis analyze(Listing listing, double minKitchenArea) {
+    public ListingAnalysis analyze(Listing listing) {
         String text = normalize(listing.descriptionOrEmpty());
+        Layout layout = layout(listing, text);
         return new ListingAnalysis(
-                layout(listing, text, minKitchenArea),
+                layout.bedrooms(),
+                layout.kitchenLiving(),
                 balcony(listing, text),
                 balconyFromKitchen(text),
                 storage(text),
@@ -54,30 +62,84 @@ public class ListingAnalyzer {
                 furniture(listing, text));
     }
 
-    LayoutType layout(Listing listing, String text, double minKitchenArea) {
-        boolean kitchenLiving = KITCHEN_LIVING.matcher(text).find();
-        boolean twoBedrooms = TWO_BEDROOMS.matcher(text).find();
+    record Layout(Integer bedrooms, boolean kitchenLiving) {
+    }
 
-        if (EURO_FOUR.matcher(text).find() || THREE_BEDROOMS.matcher(text).find()) {
-            return LayoutType.THREE_BEDROOMS;
+    /**
+     * Сколько в квартире спален. Число комнат площадки ненадёжно: евротрёшку записывают и как
+     * «2-комн.», и как «3-комн.», поэтому сначала смотрим на текст и только потом на поля.
+     */
+    Layout layout(Listing listing, String text) {
+        boolean kitchenLiving = KITCHEN_LIVING.matcher(text).find();
+        boolean separateKitchen = SEPARATE_KITCHEN.matcher(text).find();
+
+        Matcher euro = EURO.matcher(text);
+        if (euro.find()) {
+            Integer total = number(firstGroup(euro));
+            if (total != null && total > 1) {
+                return new Layout(total - 1, true);
+            }
         }
-        if (EURO_THREE.matcher(text).find() || (twoBedrooms && kitchenLiving)) {
-            return LayoutType.EURO_THREE;
+        Matcher m = N_BEDROOMS.matcher(text);
+        if (m.find()) {
+            return new Layout(number(m.group(1)), kitchenLiving);
         }
-        if (EURO_TWO.matcher(text).find() || (ONE_BEDROOM.matcher(text).find() && kitchenLiving)) {
-            return LayoutType.EURO_TWO;
+        m = N_ISOLATED_ROOMS.matcher(text);
+        if (m.find()) {
+            return new Layout(number(m.group(1)), kitchenLiving);
         }
-        if (listing.rooms() == 2 && !kitchenLiving && listing.kitchenArea() != null) {
-            return listing.kitchenArea() >= minKitchenArea
-                    ? LayoutType.TWO_BEDROOMS_BIG_KITCHEN
-                    : LayoutType.TWO_BEDROOMS_SMALL_KITCHEN;
+        if (ONE_BEDROOM.matcher(text).find() && kitchenLiving) {
+            return new Layout(1, true);
         }
-        if (listing.rooms() >= 4) {
-            return LayoutType.THREE_BEDROOMS;
+        if (STUDIO.matcher(text).find() && listing.rooms() <= 1) {
+            return new Layout(0, true);
         }
-        // «3-комн.» без описания может оказаться и евротрёшкой, и обычной трёшкой;
-        // «2-комн.» с кухней-гостиной — и евротрёшкой, и евродвушкой. Решает человек.
-        return LayoutType.UNKNOWN;
+        if (!kitchenLiving) {
+            m = N_ROOMS.matcher(text);
+            if (separateKitchen && m.find()) {
+                return new Layout(number(m.group(1)), false);
+            }
+            boolean smallKitchen = listing.kitchenArea() != null && listing.kitchenArea() < AMBIGUOUS_KITCHEN_AREA;
+            if (listing.rooms() > 0 && (separateKitchen || smallKitchen)) {
+                return new Layout(listing.rooms(), false);
+            }
+        }
+        // «3-комн.» без описания — и евротрёшка, и обычная трёшка; решает человек.
+        return new Layout(null, kitchenLiving);
+    }
+
+    private static String firstGroup(Matcher m) {
+        for (int i = 1; i <= m.groupCount(); i++) {
+            if (m.group(i) != null) {
+                return m.group(i);
+            }
+        }
+        return null;
+    }
+
+    private static Integer number(String word) {
+        if (word == null) {
+            return null;
+        }
+        if (word.chars().allMatch(Character::isDigit)) {
+            return Integer.parseInt(word);
+        }
+        if (word.startsWith("одн")) {
+            return 1;
+        }
+        if (word.startsWith("дв")) {
+            return 2;
+        }
+        if (word.startsWith("тр")) {
+            return 3;
+        }
+        if (word.startsWith("четыр")) {
+            return 4;
+        }
+        if (word.startsWith("пят")) {
+            return 5;
+        }
+        return null;
     }
 
     Tri balcony(Listing listing, String text) {

@@ -6,7 +6,6 @@ import io.github.lelena1.flatfinder.agent.AgentService;
 import io.github.lelena1.flatfinder.analysis.ListingSearchService;
 import io.github.lelena1.flatfinder.analysis.Verdict;
 import io.github.lelena1.flatfinder.domain.DealType;
-import io.github.lelena1.flatfinder.domain.District;
 import io.github.lelena1.flatfinder.domain.SearchCriteria;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
@@ -34,7 +33,7 @@ public class SearchController {
     @ModelAttribute
     public void common(Model model) {
         model.addAttribute("dealTypes", DealType.values());
-        model.addAttribute("allDistricts", District.values());
+        model.addAttribute("knownDistricts", searchService.knownDistricts());
         model.addAttribute("verdicts", Verdict.values());
         model.addAttribute("agentAvailable", agent.available());
         model.addAttribute("agentName", agent.active().map(AgentBackend::name).orElse(null));

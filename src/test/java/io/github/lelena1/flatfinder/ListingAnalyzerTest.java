@@ -1,11 +1,9 @@
 package io.github.lelena1.flatfinder;
 
-import io.github.lelena1.flatfinder.analysis.LayoutType;
 import io.github.lelena1.flatfinder.analysis.ListingAnalysis;
 import io.github.lelena1.flatfinder.analysis.ListingAnalyzer;
 import io.github.lelena1.flatfinder.analysis.Tri;
 import io.github.lelena1.flatfinder.domain.DealType;
-import io.github.lelena1.flatfinder.domain.District;
 import io.github.lelena1.flatfinder.domain.Listing;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -18,29 +16,34 @@ class ListingAnalyzerTest {
     private final ListingAnalyzer analyzer = new ListingAnalyzer();
 
     static Listing listing(int rooms, Double kitchen, String description) {
-        return new Listing("t", "test", null, DealType.SALE, District.ZILART, "адрес", 40_000_000, 60, kitchen,
+        return new Listing("t", "test", null, DealType.SALE, "Район", "адрес", 40_000_000, 60, kitchen,
                 5, 16, rooms, false, null, null, null, null, description);
     }
 
     private ListingAnalysis analyze(int rooms, Double kitchen, String description) {
-        return analyzer.analyze(listing(rooms, kitchen, description), 12);
+        return analyzer.analyze(listing(rooms, kitchen, description));
     }
 
-    @ParameterizedTest(name = "{2} → {3}")
-    @CsvSource(delimiter = '|', value = {
-            "2 | 18.0 | Продаётся ЕВРОТРЁШКА, две изолированные комнаты                | EURO_THREE",
-            "2 | 18.0 | Две изолированные спальни и большая кухня-гостиная            | EURO_THREE",
-            "3 | 20.0 | Евро-3 комнатная с видом на аллею                              | EURO_THREE",
-            "2 | 20.0 | Евродвушка: отдельная спальня и кухня-гостиная                | EURO_TWO",
-            "2 | 20.0 | Изолированная спальня и просторная кухня-гостиная             | EURO_TWO",
-            "3 | 22.0 | Сдается евро-4х комнатная квартира                             | THREE_BEDROOMS",
-            "3 | 12.0 | Три спальни и кухня                                            | THREE_BEDROOMS",
-            "2 | 15.0 | Отличная квартира с ремонтом                                   | TWO_BEDROOMS_BIG_KITCHEN",
-            "2 | 9.5  | Отличная квартира с ремонтом                                   | TWO_BEDROOMS_SMALL_KITCHEN",
-            "3 | 17.0 | Просторная квартира в новом доме                               | UNKNOWN",
+    @ParameterizedTest(name = "{2} → спален: {3}, кухня-гостиная: {4}")
+    @CsvSource(delimiter = '|', nullValues = "null", value = {
+            "2 | 18.0 | Продаётся ЕВРОТРЁШКА, две изолированные комнаты          | 2    | true",
+            "2 | 18.0 | Две изолированные спальни и большая кухня-гостиная      | 2    | true",
+            "3 | 20.0 | Евро-3 комнатная с видом на аллею                        | 2    | true",
+            "2 | 20.0 | Евродвушка: отдельная спальня и кухня-гостиная          | 1    | true",
+            "2 | 20.0 | Изолированная спальня и просторная кухня-гостиная       | 1    | true",
+            "3 | 22.0 | Сдается евро-4х комнатная квартира                       | 3    | true",
+            "3 | 12.0 | Три спальни и кухня                                      | 3    | false",
+            "2 | 13.0 | Отличная квартира с ремонтом                             | 2    | false",
+            "2 | 9.5  | Отличная квартира с ремонтом                             | 2    | false",
+            "2 | 12.0 | Изолированная спальня, гостиная и отдельная кухня 12 м² | 2    | false",
+            "1 | null | Уютная студия после ремонта                              | 0    | true",
+            "3 | 17.0 | Просторная квартира в новом доме                         | null | false",
+            "2 | 15.0 | Диван и два спальных места                               | null | false",
     })
-    void recognisesLayout(int rooms, double kitchen, String text, LayoutType expected) {
-        assertThat(analyze(rooms, kitchen, text).layout()).isEqualTo(expected);
+    void countsBedrooms(int rooms, Double kitchen, String text, Integer bedrooms, boolean kitchenLiving) {
+        ListingAnalysis a = analyze(rooms, kitchen, text);
+        assertThat(a.bedrooms()).isEqualTo(bedrooms);
+        assertThat(a.kitchenLiving()).isEqualTo(kitchenLiving);
     }
 
     @Test
@@ -50,9 +53,9 @@ class ListingAnalyzerTest {
 
     @Test
     void zeroInBalconyFieldMeansUnknownNotNo() {
-        Listing l = new Listing("t", "test", null, DealType.SALE, District.ZILART, "адрес", 1, 60, 15.0,
+        Listing l = new Listing("t", "test", null, DealType.SALE, "Район", "адрес", 1, 60, 15.0,
                 5, 16, 2, false, 0, 0, null, null, "Хорошая квартира");
-        assertThat(analyzer.analyze(l, 12).balcony()).isEqualTo(Tri.UNKNOWN);
+        assertThat(analyzer.analyze(l).balcony()).isEqualTo(Tri.UNKNOWN);
     }
 
     @Test

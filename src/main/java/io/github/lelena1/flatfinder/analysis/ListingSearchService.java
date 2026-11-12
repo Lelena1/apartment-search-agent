@@ -9,6 +9,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -41,7 +43,13 @@ public class ListingSearchService {
     }
 
     public Match evaluate(Listing listing, SearchCriteria criteria) {
-        return scorer.score(listing, analyzer.analyze(listing, criteria.minKitchenArea()), criteria);
+        return scorer.score(listing, analyzer.analyze(listing), criteria);
+    }
+
+    /** Все районы из подключённых источников — подсказки для формы. */
+    public Set<String> knownDistricts() {
+        return sources.stream().flatMap(s -> s.districts().stream())
+                .collect(Collectors.toCollection(TreeSet::new));
     }
 
     public Optional<Match> findById(String id, SearchCriteria criteria) {

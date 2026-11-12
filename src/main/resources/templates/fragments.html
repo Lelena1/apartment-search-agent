@@ -10,29 +10,65 @@
 
 <header th:fragment="header" class="header">
     <a th:href="@{/}" class="logo">🏠 Подбор квартиры</a>
-    <span class="tagline">ЗИЛАРТ · Ривер Парк Коломенское</span>
+    <span class="tagline">ваш район · ваши требования · покупка и аренда</span>
 </header>
 
 <form th:fragment="form" class="search" th:action="@{/search}" method="get" th:object="${form}">
     <fieldset class="deal">
         <legend>Что ищем</legend>
         <label th:each="d : ${dealTypes}" class="chip">
-            <input type="radio" name="deal" th:value="${d}" th:checked="${form.deal == d}">
+            <input type="radio" name="deal" th:value="${d}" th:checked="${form.deal == d}"
+                   th:attr="data-default-price=${d.defaultMaxPrice()}">
             <span th:text="${d.title()}">Покупка</span>
         </label>
     </fieldset>
-    <fieldset>
-        <legend>Где</legend>
-        <label th:each="dist : ${allDistricts}" class="chip">
-            <input type="checkbox" name="districts" th:value="${dist}" th:checked="${form.districts.contains(dist)}">
-            <span th:text="${dist.title()}">ЗИЛАРТ</span>
+
+    <div class="grid">
+        <label class="field wide">
+            <span class="legend">Районы или жилые комплексы</span>
+            <input type="text" th:field="*{districts}" id="districts" autocomplete="off"
+                   placeholder="через запятую; пусто — все районы">
+            <span class="hint" th:unless="${knownDistricts.isEmpty()}">
+                В базе:
+                <button type="button" class="link" th:each="d : ${knownDistricts}" th:text="${d}"
+                        th:attr="data-district=${d}">ЗИЛАРТ</button>
+            </span>
         </label>
+        <label class="field">
+            <span class="legend">Бюджет, ₽</span>
+            <input type="number" th:field="*{maxPrice}" min="0" step="1000" id="maxPrice"
+                   placeholder="45 000 000 / 150 000 в месяц">
+        </label>
+        <label class="field">
+            <span class="legend">Спален</span>
+            <select th:field="*{bedrooms}">
+                <option value="">неважно</option>
+                <option value="0">студия</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+            </select>
+        </label>
+        <label class="field">
+            <span class="legend">Большая кухня — от, м²</span>
+            <input type="number" th:field="*{minKitchenArea}" min="0" step="0.5">
+        </label>
+    </div>
+
+    <fieldset>
+        <legend>Обязательно</legend>
+        <label class="chip"><input type="checkbox" th:field="*{requireBalcony}"> балкон или лоджия</label>
+        <label class="chip"><input type="checkbox" th:field="*{requireFinish}"> готовый ремонт, можно заехать</label>
+        <label class="chip"><input type="checkbox" th:field="*{requireFurniture}" id="requireFurniture"> мебель</label>
+        <label class="chip"><input type="checkbox" th:field="*{allowApartments}"> апартаменты тоже подходят</label>
     </fieldset>
     <fieldset>
-        <legend>Бюджет, ₽</legend>
-        <input type="number" name="maxPrice" min="0" step="1000" th:value="${form.maxPrice}"
-               placeholder="по умолчанию: 45 000 000 / 150 000 в месяц">
+        <legend>Желательно</legend>
+        <label class="chip"><input type="checkbox" th:field="*{preferKitchenBalcony}"> выход на балкон из кухни</label>
+        <label class="chip"><input type="checkbox" th:field="*{preferStorage}"> гардеробная, постирочная, кладовая</label>
     </fieldset>
+
     <div class="actions">
         <button type="submit">Подобрать по правилам</button>
         <button type="submit" th:formaction="@{/agent}" formmethod="post" class="secondary"
@@ -41,8 +77,8 @@
             Спросить AI-агента
         </button>
         <label class="web" th:classappend="${!agentAvailable} ? 'muted'">
-            <input type="checkbox" name="web" value="true" th:checked="${form.web}" th:disabled="${!agentAvailable}">
-            агенту искать в интернете (ЦИАН, Авито, Яндекс, ДомКлик)
+            <input type="checkbox" th:field="*{web}" th:disabled="${!agentAvailable}">
+            агенту искать в интернете (ЦИАН, Авито, Яндекс, ДомКлик) — нужен хотя бы один район
         </label>
     </div>
     <p class="hint" th:if="${agentAvailable}" th:text="|AI-агент работает через ${agentName}.|"></p>
@@ -50,6 +86,26 @@
         AI-агент выключен: нужен Claude Code со входом по подписке или ключ <code>ANTHROPIC_API_KEY</code>.
         Подбор по правилам работает без них.
     </p>
+    <script>
+        (function () {
+            var input = document.getElementById('districts');
+            document.querySelectorAll('[data-district]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var parts = input.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+                    if (parts.indexOf(btn.dataset.district) < 0) parts.push(btn.dataset.district);
+                    input.value = parts.join(', ');
+                });
+            });
+            // для аренды мебель обычно нужна, для покупки — нет
+            document.querySelectorAll('input[name=deal]').forEach(function (radio) {
+                radio.addEventListener('change', function () {
+                    document.getElementById('requireFurniture').checked = radio.value === 'RENT';
+                    document.getElementById('maxPrice').placeholder =
+                        Number(radio.dataset.defaultPrice).toLocaleString('ru-RU') + ' по умолчанию';
+                });
+            });
+        })();
+    </script>
 </form>
 
 </body>

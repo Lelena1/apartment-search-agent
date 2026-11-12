@@ -90,7 +90,7 @@ public class ListingTools {
     private ObjectNode detailed(Match m) {
         ObjectNode node = summary(m);
         node.put("description", m.listing().descriptionOrEmpty());
-        node.put("layout", m.analysis().layout().title());
+        node.put("layout", m.analysis().layoutTitle(m.listing()));
         node.put("balcony", m.analysis().balcony().name());
         node.put("balcony_from_kitchen", m.analysis().balconyFromKitchen().name());
         node.put("storage", m.analysis().storage().name());
@@ -107,7 +107,7 @@ public class ListingTools {
         if (l.url() != null) {
             node.put("url", l.url());
         }
-        node.put("district", l.district().title());
+        node.put("district", l.district());
         node.put("address", l.address());
         node.put("price_rub", l.price());
         node.put("total_area_m2", l.totalArea());

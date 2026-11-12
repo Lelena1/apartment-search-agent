@@ -44,3 +44,10 @@ details { color: var(--muted); font-size: 14px; }
 .markdown a { color: var(--accent); word-break: break-word; }
 .error { color: var(--bad); }
 code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field.wide { grid-column: 1 / -1; }
+.legend { font-weight: 600; }
+.field input, .field select { width: 100%; max-width: none; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 15px; }
+button.link { background: none; border: 0; padding: 0 4px; color: var(--accent); font-size: 14px; text-decoration: underline dotted; cursor: pointer; }
+.criteria-line { color: var(--muted); font-size: 14px; white-space: pre-line; margin: 0 0 8px; }

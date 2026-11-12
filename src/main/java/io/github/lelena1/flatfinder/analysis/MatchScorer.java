@@ -1,6 +1,7 @@
 package io.github.lelena1.flatfinder.analysis;
 
 import io.github.lelena1.flatfinder.domain.Listing;
+import io.github.lelena1.flatfinder.domain.Plural;
 import io.github.lelena1.flatfinder.domain.SearchCriteria;
 import org.springframework.stereotype.Component;
 
@@ -8,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Применяет критерии к проанализированному объявлению.
+ * Применяет критерии пользователя к проанализированному объявлению.
  *
  * <p>Обязательное условие, которое точно нарушено, отсеивает квартиру. Обязательное условие,
  * о котором объявление молчит, переводит её в статус «уточнить» — такие квартиры не теряются,
@@ -17,53 +18,90 @@ import java.util.List;
 @Component
 public class MatchScorer {
 
-    public Match score(Listing listing, ListingAnalysis a, SearchCriteria criteria) {
+    public Match score(Listing listing, ListingAnalysis a, SearchCriteria c) {
         Result r = new Result();
 
         // --- обязательные условия ---
-        if (listing.price() > criteria.maxPrice()) {
+        if (listing.price() > c.maxPrice()) {
             r.reject("цена выше бюджета");
         }
-        if (listing.apartments() && !criteria.allowApartments()) {
+        if (listing.apartments() && !c.allowApartments()) {
             r.reject("апартаменты, а не квартира");
         }
-        switch (a.layout()) {
-            case EURO_THREE -> r.pro("2 спальни + кухня-гостиная", 15);
-            case TWO_BEDROOMS_BIG_KITCHEN -> r.pro("2 комнаты + большая кухня " + area(listing.kitchenArea()), 15);
-            case TWO_BEDROOMS_SMALL_KITCHEN -> r.minus("кухня всего " + area(listing.kitchenArea()), 10);
-            case EURO_TWO -> r.reject("евродвушка — только одна спальня");
-            case THREE_BEDROOMS -> r.reject("три спальни и больше — планировка не та");
-            case UNKNOWN -> r.ask("планировка: 2 спальни + кухня-гостиная или нет");
+        layout(listing, a, c, r);
+        if (c.requireFinish()) {
+            r.mandatory(a.readyFinish(), "готовая отделка, можно сразу заехать", "нет готовой отделки",
+                    "есть ли отделка, можно ли сразу заехать", 5);
+        } else if (a.readyFinish() == Tri.YES) {
+            r.pro("готовая отделка", 5);
         }
-        r.mandatory(a.readyFinish(), "готовая отделка, можно сразу заехать", "нет готовой отделки", "есть ли отделка, можно ли сразу заехать", 5);
-        r.mandatory(a.balcony(), "есть балкон/лоджия", "нет балкона и лоджии", "есть ли балкон или лоджия", 10);
-        if (criteria.furnitureRequired()) {
-            r.mandatory(a.furniture(), "сдаётся с мебелью", "сдаётся без мебели", "есть ли мебель", 5);
+        if (c.requireBalcony()) {
+            r.mandatory(a.balcony(), "есть балкон/лоджия", "нет балкона и лоджии", "есть ли балкон или лоджия", 10);
+        } else if (a.balcony() == Tri.YES) {
+            r.pro("есть балкон/лоджия", 10);
+        }
+        if (c.requireFurniture()) {
+            r.mandatory(a.furniture(), "есть мебель", "без мебели", "есть ли мебель", 5);
+        } else if (a.furniture() == Tri.YES) {
+            r.pro("есть мебель", 5);
         }
 
         // --- желательные условия ---
-        if (a.balconyFromKitchen() == Tri.YES) {
-            r.pro("выход на балкон/лоджию из кухни", 10);
-        } else if (a.balcony() != Tri.NO) {
-            r.wish("откуда выход на балкон — из кухни или из комнаты");
+        if (c.preferKitchenBalcony()) {
+            if (a.balconyFromKitchen() == Tri.YES) {
+                r.pro("выход на балкон/лоджию из кухни", 10);
+            } else if (a.balcony() != Tri.NO) {
+                r.wish("откуда выход на балкон — из кухни или из комнаты");
+            }
         }
-        if (a.storage() == Tri.YES) {
-            r.pro("есть места хранения (гардеробная/постирочная/кладовая)", 10);
-        } else {
-            r.wish("есть ли гардеробная, постирочная или кладовая");
+        if (c.preferStorage()) {
+            if (a.storage() == Tri.YES) {
+                r.pro("есть места хранения (гардеробная/постирочная/кладовая)", 10);
+            } else {
+                r.wish("есть ли гардеробная, постирочная или кладовая");
+            }
         }
         if (listing.kitchenArea() != null && listing.kitchenArea() >= 18) {
             r.score += 5;
         }
-        if (listing.price() <= criteria.maxPrice()) {
+        if (listing.price() <= c.maxPrice()) {
             // небольшой бонус за запас по бюджету — при прочих равных
-            r.score += (int) Math.round(5.0 * (criteria.maxPrice() - listing.price()) / criteria.maxPrice());
+            r.score += (int) Math.round(5.0 * (c.maxPrice() - listing.price()) / c.maxPrice());
         }
 
         Verdict verdict = r.rejected ? Verdict.REJECT : r.mandatoryUnknown ? Verdict.CHECK : Verdict.MATCH;
         int score = r.rejected ? 0 : Math.min(Math.max(r.score, 0), 100); // шкала 0–100
         return new Match(listing, a, verdict, score,
                 List.copyOf(r.pros), List.copyOf(r.toCheck), List.copyOf(r.cons));
+    }
+
+    private static void layout(Listing listing, ListingAnalysis a, SearchCriteria c, Result r) {
+        Integer wanted = c.bedrooms();
+        if (wanted == null) {
+            return;
+        }
+        Integer actual = a.bedrooms();
+        if (actual == null) {
+            r.ask("планировка: сколько спален и есть ли кухня-гостиная");
+            return;
+        }
+        if (!actual.equals(wanted)) {
+            r.reject(actual == 1 && a.kitchenLiving() && wanted > 1 ? "евродвушка — только одна спальня"
+                    : actual == 0 ? "студия, а нужно " + Plural.bedrooms(wanted)
+                    : Plural.bedrooms(actual) + ", а нужно " + wanted);
+            return;
+        }
+        String title = a.layoutTitle(listing);
+        if (wanted == 0 || a.kitchenLiving()) {
+            r.pro(title, 15);
+        } else if (listing.kitchenArea() == null) {
+            r.pro(title, 10);
+            r.wish("какая площадь кухни");
+        } else if (listing.kitchenArea() >= c.minKitchenArea()) {
+            r.pro(title + ", кухня " + area(listing.kitchenArea()), 15);
+        } else {
+            r.minus("кухня всего " + area(listing.kitchenArea()), 10);
+        }
     }
 
     private static String area(Double area) {

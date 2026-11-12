@@ -68,7 +68,7 @@ public class ClaudeApiAgent implements AgentBackend {
         MessageCreateParams.Builder params = MessageCreateParams.builder()
                 .model(props.model())
                 .maxTokens(16000L)
-                .system(AgentPrompts.system(props.searchDomains()))
+                .system(AgentPrompts.system(criteria, props.searchDomains()))
                 .outputConfig(OutputConfig.builder().effort(OutputConfig.Effort.MEDIUM).build())
                 .addUserMessage(AgentPrompts.task(criteria, webSearch));
         tools.specs().values().forEach(spec -> params.addTool(toSdkTool(spec)));

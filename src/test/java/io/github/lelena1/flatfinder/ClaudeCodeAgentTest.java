@@ -11,11 +11,17 @@ class ClaudeCodeAgentTest {
 
     @Test
     void parsesSuccessfulAnswer() {
+        // формат --output-format stream-json: по одному JSON-событию на строку
         AgentReport r = ClaudeCodeAgentAccess.parse("""
-                {"type":"result","is_error":false,"num_turns":3,"result":"## Лучшие варианты\\n...",
-                 "usage":{"server_tool_use":{"web_search_requests":2}}}""");
+                {"type":"system","subtype":"init"}
+                {"type":"assistant","message":{"content":[{"type":"tool_use","name":"WebSearch","input":{}}]}}
+                {"type":"assistant","message":{"content":[{"type":"tool_use","name":"WebSearch","input":{}},{"type":"text","text":"..."}]}}
+                {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{}}]}}
+                {"type":"result","is_error":false,"result":"## Лучшие варианты\\n..."}
+                """);
         assertThat(r.success()).isTrue();
         assertThat(r.markdown()).startsWith("## Лучшие варианты");
+        assertThat(r.toolCalls()).isEqualTo(3);
         assertThat(r.webSearches()).isEqualTo(2);
     }
 

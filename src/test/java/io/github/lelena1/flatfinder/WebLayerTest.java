@@ -27,9 +27,17 @@ class WebLayerTest {
 
     @Test
     void searchShowsDemoListings() throws Exception {
-        mvc.perform(get("/search").param("deal", "RENT"))
+        mvc.perform(get("/search").param("deal", "RENT").param("districts", "ЗИЛАРТ, Ривер Парк"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Аренда: просмотрено 10 объявлений")))
                 .andExpect(content().string(containsString("выход на балкон/лоджию из кухни")));
+    }
+
+    @Test
+    void uncheckedRequirementIsRespected() throws Exception {
+        // флажок «балкон обязателен» снят: Spring получает только маркер _requireBalcony
+        mvc.perform(get("/search").param("deal", "SALE").param("_requireBalcony", "on"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("балкон или лоджия — плюс, но не обязательно")));
     }
 }

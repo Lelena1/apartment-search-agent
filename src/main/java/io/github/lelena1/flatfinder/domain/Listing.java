@@ -14,7 +14,7 @@ public record Listing(
         String source,
         String url,
         DealType dealType,
-        District district,
+        String district,
         String address,
         long price,
         double totalArea,

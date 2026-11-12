@@ -61,11 +61,15 @@ public class ClaudeCodeAgent implements AgentBackend {
             return AgentReport.failed("Claude Code не найден. Установите его и войдите под своей подпиской — "
                     + "инструкция в README, раздел «AI-агент по подписке».");
         }
-        String prompt = AgentPrompts.withData(props.searchDomains(),
+        String prompt = AgentPrompts.withData(criteria, props.searchDomains(),
                 AgentPrompts.task(criteria, webSearch), tools.snapshot(criteria));
 
         List<String> cmd = new ArrayList<>(List.of(cli.get().toString(),
-                "-p", "--output-format", "json", "--max-turns", String.valueOf(props.maxTurns())));
+                // stream-json: построчный журнал шагов — по нему считаем, сколько раз агент искал в интернете
+                "-p", "--output-format", "stream-json", "--verbose", "--max-turns", String.valueOf(props.maxTurns()),
+                // изоляция от личных настроек пользователя: без его скиллов, MCP-серверов и истории сессий,
+                // чтобы ответ зависел только от запроса из формы
+                "--disable-slash-commands", "--strict-mcp-config", "--no-session-persistence"));
         if (webSearch) {
             cmd.addAll(List.of("--allowedTools", "WebSearch"));
         } else {
@@ -104,24 +108,50 @@ public class ClaudeCodeAgent implements AgentBackend {
         }
     }
 
-    /** Разбирает JSON, который печатает {@code claude -p --output-format json}. */
-    static AgentReport parseResult(String json) {
-        try {
-            JsonNode root = MAPPER.readTree(json);
-            String result = root.path("result").asText("");
-            if (root.path("is_error").asBoolean(false)) {
-                if (result.toLowerCase().contains("not logged in") || result.contains("/login")) {
-                    return AgentReport.failed("Claude Code установлен, но вход не выполнен: откройте терминал, "
-                            + "запустите claude и выполните /login под своей подпиской.");
-                }
-                return AgentReport.failed("Claude Code вернул ошибку: " + result);
+    /**
+     * Разбирает вывод {@code claude -p --output-format stream-json}: по строке JSON на событие.
+     * Из сообщений ассистента считаем вызовы инструментов, итог берём из последнего события {@code result}.
+     */
+    static AgentReport parseResult(String output) {
+        JsonNode result = null;
+        int toolCalls = 0;
+        int webSearches = 0;
+        for (String line : output.split("\\R")) {
+            if (line.isBlank()) {
+                continue;
             }
-            int webSearches = root.path("usage").path("server_tool_use").path("web_search_requests").asInt(0);
-            int turns = root.path("num_turns").asInt(0);
-            return AgentReport.ok(result, Math.max(turns - 1, 0), webSearches);
-        } catch (IOException e) {
+            JsonNode event;
+            try {
+                event = MAPPER.readTree(line);
+            } catch (IOException e) {
+                continue; // посторонняя строка в выводе — пропускаем
+            }
+            if ("assistant".equals(event.path("type").asText())) {
+                for (JsonNode block : event.path("message").path("content")) {
+                    if ("tool_use".equals(block.path("type").asText())) {
+                        toolCalls++;
+                        String name = block.path("name").asText();
+                        if (name.equals("WebSearch") || name.equals("WebFetch")) {
+                            webSearches++;
+                        }
+                    }
+                }
+            } else if (event.has("result") || "result".equals(event.path("type").asText())) {
+                result = event;
+            }
+        }
+        if (result == null) {
             return AgentReport.failed("Не удалось разобрать ответ Claude Code");
         }
+        String text = result.path("result").asText("");
+        if (result.path("is_error").asBoolean(false)) {
+            if (text.toLowerCase().contains("not logged in") || text.contains("/login")) {
+                return AgentReport.failed("Claude Code установлен, но вход не выполнен: откройте терминал, "
+                        + "запустите claude и выполните /login под своей подпиской.");
+            }
+            return AgentReport.failed("Claude Code вернул ошибку: " + text);
+        }
+        return AgentReport.ok(text, toolCalls, webSearches);
     }
 
     /** Путь к CLI: из настройки или поиск {@code claude} в PATH. */

@@ -10,6 +10,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /** Объявления из JSON-массива в формате {@link Listing}. Данные читаются один раз при старте. */
 public abstract class JsonListingSource implements ListingSource {
@@ -31,8 +35,14 @@ public abstract class JsonListingSource implements ListingSource {
     public List<Listing> fetch(SearchCriteria criteria) {
         return listings.stream()
                 .filter(l -> l.dealType() == criteria.dealType())
-                .filter(l -> criteria.districts().contains(l.district()))
+                .filter(criteria::matchesDistrict)
                 .toList();
+    }
+
+    @Override
+    public Set<String> districts() {
+        return listings.stream().map(Listing::district).filter(Objects::nonNull)
+                .collect(Collectors.toCollection(TreeSet::new));
     }
 
     public int size() {
