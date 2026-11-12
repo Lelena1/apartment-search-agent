@@ -10,7 +10,7 @@
         <h2>Рекомендация AI-агента</h2>
         <div th:if="${report.success()}">
             <div class="markdown" th:utext="${reportHtml}"></div>
-            <p class="meta" th:text="|Обращений к базе: ${report.toolCalls()}, веб-поисков: ${report.webSearches()}|"></p>
+            <p class="meta" th:text="|Через ${agentName}${report.toolCalls() > 0 ? ', обращений к базе: ' + report.toolCalls() : ''}, веб-поисков: ${report.webSearches()}|"></p>
         </div>
         <p th:unless="${report.success()}" class="error" th:text="${report.error()}"></p>
     </section>
