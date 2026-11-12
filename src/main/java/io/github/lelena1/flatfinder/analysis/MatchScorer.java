@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Применяет критерии пользователя к проанализированному объявлению.
@@ -35,11 +36,7 @@ public class MatchScorer {
         } else if (a.readyFinish() == Tri.YES) {
             r.pro("готовая отделка", 5);
         }
-        if (c.requireBalcony()) {
-            r.mandatory(a.balcony(), "есть балкон/лоджия", "нет балкона и лоджии", "есть ли балкон или лоджия", 10);
-        } else if (a.balcony() == Tri.YES) {
-            r.pro("есть балкон/лоджия", 10);
-        }
+        balcony(a, c, r);
         if (c.requireFurniture()) {
             r.mandatory(a.furniture(), "есть мебель", "без мебели", "есть ли мебель", 5);
         } else if (a.furniture() == Tri.YES) {
@@ -73,6 +70,33 @@ public class MatchScorer {
         int score = r.rejected ? 0 : Math.min(Math.max(r.score, 0), 100); // шкала 0–100
         return new Match(listing, a, verdict, score,
                 List.copyOf(r.pros), List.copyOf(r.toCheck), List.copyOf(r.cons));
+    }
+
+    /**
+     * Балкон, лоджия или терраса — полноценный выход наружу. Французский балкон (окно в пол) засчитывается,
+     * только если пользователь отметил, что он подходит, и даёт меньше баллов.
+     */
+    private static void balcony(ListingAnalysis a, SearchCriteria c, Result r) {
+        if (a.balcony() == Tri.YES) {
+            String kinds = a.balconyKinds().stream().filter(BalconyKind::walkOut)
+                    .map(BalconyKind::title).collect(Collectors.joining(", "));
+            r.pro("есть " + (kinds.isEmpty() ? "балкон/лоджия" : kinds)
+                    + (a.hasFrenchBalcony() ? " и французский балкон" : ""), 10);
+            return;
+        }
+        if (a.hasFrenchBalcony() && c.allowFrenchBalcony()) {
+            r.pro("французский балкон (окно в пол: створку открыть можно, выйти на площадку — нет)",
+                    c.requireBalcony() ? 5 : 3);
+            return;
+        }
+        if (!c.requireBalcony()) {
+            return;
+        }
+        if (a.balcony() == Tri.NO) {
+            r.reject(a.hasFrenchBalcony() ? "только французский балкон" : "нет балкона и лоджии");
+        } else {
+            r.ask(c.allowFrenchBalcony() ? "есть ли балкон, лоджия или французский балкон" : "есть ли балкон или лоджия");
+        }
     }
 
     private static void layout(Listing listing, ListingAnalysis a, SearchCriteria c, Result r) {

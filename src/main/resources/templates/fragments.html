@@ -59,6 +59,8 @@
     <fieldset>
         <legend>Обязательно</legend>
         <label class="chip"><input type="checkbox" th:field="*{requireBalcony}"> балкон или лоджия</label>
+        <label class="chip" title="Окно от пола с ограждением: створку открыть можно, выйти на площадку — нет">
+            <input type="checkbox" th:field="*{allowFrenchBalcony}"> французский балкон тоже подходит</label>
         <label class="chip"><input type="checkbox" th:field="*{requireFinish}"> готовый ремонт, можно заехать</label>
         <label class="chip"><input type="checkbox" th:field="*{requireFurniture}" id="requireFurniture"> мебель</label>
         <label class="chip"><input type="checkbox" th:field="*{allowApartments}"> апартаменты тоже подходят</label>

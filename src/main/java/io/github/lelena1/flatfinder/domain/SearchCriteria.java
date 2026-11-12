@@ -14,6 +14,7 @@ import java.util.Locale;
  * @param bedrooms               сколько нужно спален (0 — студия); {@code null} — неважно
  * @param minKitchenArea         с какой площади отдельная кухня считается «большой», м²
  * @param requireBalcony         балкон или лоджия обязательны
+ * @param allowFrenchBalcony     французский балкон (окно в пол) тоже подходит — как отдельный вид балкона
  * @param preferKitchenBalcony   желательно, чтобы выход на балкон был из кухни
  * @param preferStorage          желательны гардеробная / постирочная / кладовая
  * @param requireFinish          нужна готовая отделка, чтобы сразу заехать
@@ -27,6 +28,7 @@ public record SearchCriteria(
         Integer bedrooms,
         double minKitchenArea,
         boolean requireBalcony,
+        boolean allowFrenchBalcony,
         boolean preferKitchenBalcony,
         boolean preferStorage,
         boolean requireFinish,
@@ -43,12 +45,12 @@ public record SearchCriteria(
     /** Пример из README: две спальни, балкон, готовая отделка; для аренды — с мебелью. */
     public static SearchCriteria defaultsFor(DealType dealType) {
         return new SearchCriteria(dealType, List.of(), dealType.defaultMaxPrice(), 2,
-                DEFAULT_MIN_KITCHEN_AREA, true, true, true, true, dealType == DealType.RENT, false);
+                DEFAULT_MIN_KITCHEN_AREA, true, true, true, true, true, dealType == DealType.RENT, false);
     }
 
     public SearchCriteria withDistricts(List<String> newDistricts) {
         return new SearchCriteria(dealType, newDistricts, maxPrice, bedrooms, minKitchenArea, requireBalcony,
-                preferKitchenBalcony, preferStorage, requireFinish, requireFurniture, allowApartments);
+                allowFrenchBalcony, preferKitchenBalcony, preferStorage, requireFinish, requireFurniture, allowApartments);
     }
 
     public boolean matchesDistrict(Listing listing) {
@@ -69,7 +71,8 @@ public record SearchCriteria(
                     : "- планировка: РОВНО " + Plural.bedrooms(bedrooms)
                     + " + кухня-гостиная или отдельная кухня от " + format(minKitchenArea) + " м²;\n");
         }
-        sb.append(requireBalcony ? "- обязательно балкон или лоджия" : "- балкон или лоджия — плюс, но не обязательно");
+        String kinds = allowFrenchBalcony ? "балкон, лоджия или французский балкон" : "балкон или лоджия";
+        sb.append(requireBalcony ? "- обязательно " + kinds : "- " + kinds + " — плюс, но не обязательно");
         sb.append(preferKitchenBalcony ? "; желательно с выходом из кухни;\n" : ";\n");
         if (preferStorage) {
             sb.append("- желательно места хранения: гардеробная, постирочная, кладовая;\n");

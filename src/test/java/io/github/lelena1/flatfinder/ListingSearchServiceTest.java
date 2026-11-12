@@ -41,7 +41,20 @@ class ListingSearchServiceTest {
         assertThat(m.get("demo-zs-05").cons()).contains("нет готовой отделки");
         assertThat(m.get("demo-zs-06").cons()).contains("цена выше бюджета");
         assertThat(m.get("demo-rs-03").cons()).contains("апартаменты, а не квартира");
-        assertThat(m.get("demo-rs-06").cons()).contains("нет балкона и лоджии"); // только французский балкон
+    }
+
+    @Test
+    void frenchBalconyIsASeparateKind() {
+        // по умолчанию французский балкон подходит, но баллов даёт меньше, чем настоящий балкон
+        Map<String, Match> m = run(DealType.SALE);
+        assertThat(m.get("demo-rs-06").verdict()).isEqualTo(Verdict.MATCH);
+        assertThat(m.get("demo-rs-06").pros()).anyMatch(p -> p.startsWith("французский балкон"));
+        assertThat(m.get("demo-rs-06").score()).isLessThan(m.get("demo-zs-01").score());
+
+        // если французский балкон не подходит — квартира отсеивается с понятной причиной
+        SearchCriteria strict = new SearchCriteria(DealType.SALE, List.of(), 45_000_000, 2, 12,
+                true, false, true, true, true, false, false);
+        assertThat(run(strict).get("demo-rs-06").cons()).contains("только французский балкон");
     }
 
     @Test
@@ -81,14 +94,14 @@ class ListingSearchServiceTest {
     void otherRequirementsWorkToo() {
         // однушка в Хамовниках, балкон не обязателен
         SearchCriteria oneBedroom = new SearchCriteria(DealType.SALE, List.of("Хамовники"), 30_000_000, 1,
-                9, false, false, false, true, false, false);
+                9, false, false, false, false, true, false, false);
         Map<String, Match> m = run(oneBedroom);
         assertThat(m.get("demo-hs-01").verdict()).isEqualTo(Verdict.MATCH);
         assertThat(m.get("demo-hs-03").cons()).contains("студия, а нужно 1 спальня");
 
         // большая семья: три спальни в аренду в Митино
         SearchCriteria threeBedrooms = new SearchCriteria(DealType.RENT, List.of("Митино"), 100_000, 3,
-                12, true, false, true, true, true, false);
+                12, true, false, false, true, true, true, false);
         Map<String, Match> r = run(threeBedrooms);
         assertThat(r.get("demo-mr-01").verdict()).isEqualTo(Verdict.MATCH);
         assertThat(r.get("demo-mr-02").verdict()).isEqualTo(Verdict.REJECT);
@@ -97,7 +110,7 @@ class ListingSearchServiceTest {
     @Test
     void anyBedroomsWhenNotSpecified() {
         SearchCriteria any = new SearchCriteria(DealType.RENT, List.of("Митино"), 100_000, null,
-                12, true, false, false, true, true, false);
+                12, true, false, false, false, true, true, false);
         assertThat(run(any).values()).noneMatch(m -> m.verdict() == Verdict.REJECT);
     }
 }

@@ -18,6 +18,7 @@ public class SearchForm {
     private Integer bedrooms = 2;
     private Double minKitchenArea = SearchCriteria.DEFAULT_MIN_KITCHEN_AREA;
     private boolean requireBalcony = true;
+    private boolean allowFrenchBalcony = true;
     private boolean preferKitchenBalcony = true;
     private boolean preferStorage = true;
     private boolean requireFinish = true;
@@ -31,7 +32,7 @@ public class SearchForm {
         double kitchen = minKitchenArea == null || minKitchenArea <= 0
                 ? SearchCriteria.DEFAULT_MIN_KITCHEN_AREA : minKitchenArea;
         return new SearchCriteria(deal, districtList(), budget, bedrooms, kitchen, requireBalcony,
-                preferKitchenBalcony, preferStorage, requireFinish, getRequireFurniture(), allowApartments);
+                allowFrenchBalcony, preferKitchenBalcony, preferStorage, requireFinish, getRequireFurniture(), allowApartments);
     }
 
     public List<String> districtList() {
@@ -85,6 +86,14 @@ public class SearchForm {
 
     public void setRequireBalcony(boolean requireBalcony) {
         this.requireBalcony = requireBalcony;
+    }
+
+    public boolean isAllowFrenchBalcony() {
+        return allowFrenchBalcony;
+    }
+
+    public void setAllowFrenchBalcony(boolean allowFrenchBalcony) {
+        this.allowFrenchBalcony = allowFrenchBalcony;
     }
 
     public boolean isPreferKitchenBalcony() {

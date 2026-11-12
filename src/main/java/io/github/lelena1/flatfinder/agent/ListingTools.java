@@ -92,6 +92,7 @@ public class ListingTools {
         node.put("description", m.listing().descriptionOrEmpty());
         node.put("layout", m.analysis().layoutTitle(m.listing()));
         node.put("balcony", m.analysis().balcony().name());
+        node.put("balcony_kinds", m.analysis().balconyTitle());
         node.put("balcony_from_kitchen", m.analysis().balconyFromKitchen().name());
         node.put("storage", m.analysis().storage().name());
         node.put("ready_finish", m.analysis().readyFinish().name());

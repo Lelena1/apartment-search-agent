@@ -3,7 +3,9 @@ package io.github.lelena1.flatfinder.analysis;
 import io.github.lelena1.flatfinder.domain.Listing;
 import org.springframework.stereotype.Component;
 
+import java.util.EnumSet;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,6 +36,9 @@ public class ListingAnalyzer {
     private static final Pattern FRENCH_BALCONY = rx("французск\\w*\\s*балкон");
     private static final Pattern NO_BALCONY = rx("без балкона|без лоджии|нет балкона|нет лоджии|балкона нет|лоджии нет");
     private static final Pattern BALCONY = rx("лодж|балкон|террас");
+    private static final Pattern LOGGIA = rx("лодж");
+    private static final Pattern PLAIN_BALCONY = rx("балкон");
+    private static final Pattern TERRACE = rx("террас");
     private static final Pattern BALCONY_FROM_KITCHEN = rx(
             "кухн\\w*[^.;]{0,40}\\s(с|на)\\s(лодж|балкон|террас)|" +
             "(лодж|балкон|террас)\\w*[^.;]{0,30}из кухн|" +
@@ -56,6 +61,7 @@ public class ListingAnalyzer {
                 layout.bedrooms(),
                 layout.kitchenLiving(),
                 balcony(listing, text),
+                balconyKinds(listing, text),
                 balconyFromKitchen(text),
                 storage(text),
                 finish(listing, text),
@@ -142,6 +148,11 @@ public class ListingAnalyzer {
         return null;
     }
 
+    /**
+     * Есть ли настоящий балкон, на который можно выйти: балкон, лоджия или терраса.
+     * Французский балкон сюда не входит — это окно в пол с ограждением; он учитывается отдельно,
+     * см. {@link #balconyKinds}.
+     */
     Tri balcony(Listing listing, String text) {
         if (NO_BALCONY.matcher(text).find()) {
             return Tri.NO;
@@ -151,9 +162,31 @@ public class ListingAnalyzer {
             return Tri.YES;
         }
         if (FRENCH_BALCONY.matcher(text).find()) {
-            return Tri.NO; // французский балкон — это окно в пол с ограждением, выйти на него нельзя
+            return Tri.NO;
         }
         return Tri.UNKNOWN; // «0» в поле площадки ничего не доказывает: его часто не заполняют
+    }
+
+    /** Какие виды балконов упомянуты в объявлении — для показа и для критерия «французский балкон подходит». */
+    Set<BalconyKind> balconyKinds(Listing listing, String text) {
+        Set<BalconyKind> kinds = EnumSet.noneOf(BalconyKind.class);
+        if (FRENCH_BALCONY.matcher(text).find()) {
+            kinds.add(BalconyKind.FRENCH);
+        }
+        String withoutFrench = FRENCH_BALCONY.matcher(text).replaceAll(" ");
+        if (NO_BALCONY.matcher(withoutFrench).find()) {
+            return kinds;
+        }
+        if (LOGGIA.matcher(withoutFrench).find() || positive(listing.loggias())) {
+            kinds.add(BalconyKind.LOGGIA);
+        }
+        if (PLAIN_BALCONY.matcher(withoutFrench).find() || positive(listing.balconies())) {
+            kinds.add(BalconyKind.BALCONY);
+        }
+        if (TERRACE.matcher(withoutFrench).find()) {
+            kinds.add(BalconyKind.TERRACE);
+        }
+        return kinds;
     }
 
     Tri balconyFromKitchen(String text) {

@@ -3,6 +3,9 @@ package io.github.lelena1.flatfinder.analysis;
 import io.github.lelena1.flatfinder.domain.Listing;
 import io.github.lelena1.flatfinder.domain.Plural;
 
+import java.util.Set;
+import java.util.stream.Collectors;
+
 /**
  * Что удалось понять об объявлении: из структурированных полей и из текста описания.
  *
@@ -13,11 +16,21 @@ public record ListingAnalysis(
         Integer bedrooms,
         boolean kitchenLiving,
         Tri balcony,
+        Set<BalconyKind> balconyKinds,
         Tri balconyFromKitchen,
         Tri storage,
         Tri readyFinish,
         Tri furniture
 ) {
+    public boolean hasFrenchBalcony() {
+        return balconyKinds.contains(BalconyKind.FRENCH);
+    }
+
+    /** Например «лоджия, французский балкон». */
+    public String balconyTitle() {
+        return balconyKinds.stream().map(BalconyKind::title).collect(Collectors.joining(", "));
+    }
+
     /** Планировка человеческим языком, например «2 спальни + кухня-гостиная». */
     public String layoutTitle(Listing listing) {
         if (bedrooms == null) {

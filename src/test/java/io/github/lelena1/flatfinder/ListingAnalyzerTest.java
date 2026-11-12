@@ -1,5 +1,6 @@
 package io.github.lelena1.flatfinder;
 
+import io.github.lelena1.flatfinder.analysis.BalconyKind;
 import io.github.lelena1.flatfinder.analysis.ListingAnalysis;
 import io.github.lelena1.flatfinder.analysis.ListingAnalyzer;
 import io.github.lelena1.flatfinder.analysis.Tri;
@@ -47,8 +48,14 @@ class ListingAnalyzerTest {
     }
 
     @Test
-    void frenchBalconyIsNotABalcony() {
-        assertThat(analyze(2, 15.0, "Панорамные окна с французским балконом").balcony()).isEqualTo(Tri.NO);
+    void frenchBalconyIsASeparateKind() {
+        ListingAnalysis onlyFrench = analyze(2, 15.0, "Панорамные окна с французским балконом");
+        assertThat(onlyFrench.balcony()).isEqualTo(Tri.NO); // выйти на площадку нельзя
+        assertThat(onlyFrench.balconyKinds()).containsExactly(BalconyKind.FRENCH);
+
+        ListingAnalysis both = analyze(2, 15.0, "Лоджия в спальне и два французских балкона в гостиной");
+        assertThat(both.balcony()).isEqualTo(Tri.YES);
+        assertThat(both.balconyKinds()).containsExactlyInAnyOrder(BalconyKind.LOGGIA, BalconyKind.FRENCH);
     }
 
     @Test
